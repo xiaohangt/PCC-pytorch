@@ -7,7 +7,7 @@ from scipy.integrate import solve_ivp
 
 class PendulumMDP(PoleBase):
     # goal range
-    goal_range = [-np.pi / 6, np.pi / 6]
+    goal_range = [-np.pi / 20, np.pi / 20]
 
     # state range
     angle_range = [-np.pi, np.pi]

@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import random
+import time
 
 import numpy as np
 import torch
@@ -36,7 +37,7 @@ torch.backends.cudnn.deterministic = True
 torch.set_default_dtype(torch.float64)
 
 config_path = {
-    "plane": "ilqr_config/plane.json",
+    "planar": "ilqr_config/planar.json",
     "swing": "ilqr_config/swing.json",
     "balance": "ilqr_config/balance.json",
     "cartpole": "ilqr_config/cartpole.json",
@@ -91,6 +92,8 @@ def main(args):
         if os.path.isdir(os.path.join(setting_path, dI))
     ]
     log_folders.sort()
+    # import pdb
+    # pdb.set_trace()
 
     # statistics on all trained models
     avg_model_percent = 0.0
@@ -104,14 +107,19 @@ def main(args):
         model_path = ilqr_result_path + "/" + log_base
         if not os.path.exists(model_path):
             os.makedirs(model_path)
+
         print("iLQR for " + log_base)
 
         # load the trained model
         model = PCC(armotized, x_dim, z_dim, u_dim, env_name)
         model.load_state_dict(torch.load(log + "/model_" + str(epoch), map_location="cpu"))
         model.eval()
+        if armotized:
+            torch.set_grad_enabled(False)
+
         dynamics = model.dynamics
         encoder = model.encoder
+        start_time = time.time()
 
         # run the task with 10 different start and goal states for a particular model
         avg_percent = 0.0
@@ -165,6 +173,8 @@ def main(args):
             z_start_horizon = np.copy(z_start)
             obs_traj = [mdp.render(s_start).squeeze()]
             goal_counter = 0.0
+            raw_returns, steps_to_goals = [], []
+            consecutive_goals, distance_to_goal, raw_return = 0, -1, 0.0
             for plan_iter in range(1, horizon + 1):
                 latent_cost_list = [None] * len(all_actions_trajs)
                 # iterate over all trajectories
@@ -206,12 +216,20 @@ def main(args):
                         latent_cost_list[i] = np.inf
                 traj_opt_id = np.argmin(latent_cost_list)
                 action_chosen = all_actions_trajs[traj_opt_id][0]
+                raw_return += mdp.raw_reward_function(s_start_horizon, action_chosen)
+
                 s_start_horizon, z_start_horizon = update_horizon_start(
                     mdp, s_start_horizon, action_chosen, encoder, config
                 )
 
                 obs_traj.append(mdp.render(s_start_horizon).squeeze())
                 goal_counter += mdp.reward_function(s_start_horizon)
+                if goal_counter > 0:
+                    consecutive_goals += 1
+                else:
+                    consecutive_goals = 0
+                if consecutive_goals == 10 and distance_to_goal == -1:
+                    distance_to_goal = plan_iter - 10 + 1
 
                 all_actions_trajs = refresh_actions_trajs(
                     all_actions_trajs,
@@ -222,6 +240,10 @@ def main(args):
                     num_extreme,
                 )
 
+            print("Raw return", raw_return)
+            raw_returns.append(raw_return)
+            print("Distance to goal", distance_to_goal)
+            steps_to_goals.append(distance_to_goal)
             # compute the percentage close to goal
             success_rate = goal_counter / horizon
             print("Success rate: %.2f" % (success_rate))
@@ -232,8 +254,10 @@ def main(args):
 
             # save trajectory as gif file
             gif_path = model_path + "/task_{:01d}.gif".format(task_counter + 1)
-            save_traj(obs_traj, mdp.render(s_goal).squeeze(), gif_path, config["task"])
-
+            # save_traj(obs_traj, mdp.render(s_goal).squeeze(), gif_path, config["task"])
+        
+        print("Mean Returns and Dtg", np.mean(raw_returns), np.mean(steps_to_goals))
+        print("Total time cost", time.time() - start_time)
         avg_percent = avg_percent / 10
         print("Average success rate: " + str(avg_percent))
         print("====================================")

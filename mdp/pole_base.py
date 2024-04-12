@@ -63,6 +63,12 @@ class PoleBase(object):
         """Reward function."""
         return int(self.is_goal(s)) * self.goal_reward
 
+    def raw_reward_function(self, s, a):
+        """Reward function."""
+        angle = s[StateIndex.THETA]
+        angle_dot = s[StateIndex.THETA_DOT]
+        return -(angle**2 + 0.1 * angle_dot**2 + 0.01 * a**2)
+
     def sample_random_state(self):
         pass
 

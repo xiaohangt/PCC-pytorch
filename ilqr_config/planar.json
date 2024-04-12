@@ -1,5 +1,5 @@
 {
-  "task": "plane",
+  "task": "planar",
 
   "pinv_init": 1e-5,
   "pinv_mult": 2.0,

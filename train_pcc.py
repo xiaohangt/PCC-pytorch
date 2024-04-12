@@ -15,6 +15,8 @@ from mdp.plane_obstacles_mdp import PlanarObstaclesMDP
 from pcc_model import PCC
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
+import ot
+import pdb
 
 
 torch.set_default_dtype(torch.float64)
@@ -79,6 +81,8 @@ def compute_loss(
     # additional deterministic loss
     determ_loss = -bernoulli(x_next, p_x_next_determ)
 
+    # metric_loss = (((x - x_next) ** 2).mean(dim=1) - ((z - z_next) ** 2).mean(dim=1)).abs().mean()
+
     lam_p, lam_c, lam_cur = lam
     return (
         pred_loss,
@@ -92,7 +96,7 @@ def compute_loss(
     )
 
 
-def train(model, env_name, train_loader, lam, vae_coeff, determ_coeff, optimizer, armotized, epoch):
+def train(device, model, env_name, train_loader, lam, vae_coeff, determ_coeff, optimizer, armotized, epoch):
     avg_pred_loss = 0.0
     avg_consis_loss = 0.0
     avg_cur_loss = 0.0
@@ -191,6 +195,7 @@ def main(args):
     epoches = args.num_iter
     iter_save = args.iter_save
     save_map = args.save_map
+    device = f"cuda:{args.device}"
 
     seed_torch(seed)
 
@@ -214,7 +219,7 @@ def main(args):
     log_path = "logs/" + env_name + "/" + log_dir
     if not path.exists(log_path):
         os.makedirs(log_path)
-    writer = SummaryWriter(log_path)
+    # writer = SummaryWriter(log_path)
 
     result_path = "result/" + env_name + "/" + log_dir
     if not path.exists(result_path):
@@ -226,14 +231,14 @@ def main(args):
         latent_maps = [draw_latent_map(model, mdp)]
     for i in range(epoches):
         avg_pred_loss, avg_consis_loss, avg_cur_loss, avg_loss = train(
-            model, env_name, data_loader, lam, vae_coeff, determ_coeff, optimizer, armotized, i
+            device, model, env_name, data_loader, lam, vae_coeff, determ_coeff, optimizer, armotized, i
         )
 
         # ...log the running loss
-        writer.add_scalar("prediction loss", avg_pred_loss, i)
-        writer.add_scalar("consistency loss", avg_consis_loss, i)
-        writer.add_scalar("curvature loss", avg_cur_loss, i)
-        writer.add_scalar("training loss", avg_loss, i)
+        # writer.add_scalar("prediction loss", avg_pred_loss, i)
+        # writer.add_scalar("consistency loss", avg_consis_loss, i)
+        # writer.add_scalar("curvature loss", avg_cur_loss, i)
+        # writer.add_scalar("training loss", avg_loss, i)
         if env_name == "planar" and save_map:
             if (i + 1) % 10 == 0:
                 map_i = draw_latent_map(model, mdp)
@@ -263,7 +268,7 @@ def main(args):
             duration=100,
             loop=0,
         )
-    writer.close()
+    # writer.close()
 
 
 def str2bool(v):
@@ -292,6 +297,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--log_dir", required=True, type=str, help="directory to save training log")
     parser.add_argument("--seed", required=True, type=int, help="seed number")
+    parser.add_argument("--device", required=True, type=int, help="0")
     parser.add_argument("--data_size", required=True, type=int, help="the bumber of data points used for training")
     parser.add_argument("--noise", default=0, type=float, help="the level of noise")
     parser.add_argument("--batch_size", default=128, type=int, help="batch size")

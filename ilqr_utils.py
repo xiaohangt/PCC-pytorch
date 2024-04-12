@@ -125,7 +125,7 @@ def forward(z_seq, u_seq, k, K, dynamics, alpha):
 def get_x_data(mdp, state, config):
     image_data = mdp.render(state).squeeze()
     x_dim = config["obs_shape"]
-    if config["task"] == "plane":
+    if config["task"] == "planar":
         x_dim = np.prod(x_dim)
         x_data = torch.from_numpy(image_data).double().view(x_dim).unsqueeze(0)
     elif config["task"] in ["swing", "balance"]:
@@ -142,7 +142,7 @@ def get_x_data(mdp, state, config):
 
 def update_horizon_start(mdp, s, u, encoder, config):
     s_next = mdp.transition_function(s, u)
-    if config["task"] == "plane":
+    if config["task"] == "planar":
         x_next = get_x_data(mdp, s_next, config)
     elif config["task"] in ["swing", "balance"]:
         obs = mdp.render(s).squeeze()
@@ -243,7 +243,7 @@ def jacobian(dynamics, z, u):
     u_tensor = torch.from_numpy(u).view(1, -1).double()
     if dynamics.armotized:
         _, A, B = dynamics(z_tensor, u_tensor)
-        return A.squeeze().view(z_dim, z_dim).numpy(), B.squeeze().view(z_dim, u_dim).numpy()
+        return A.squeeze().view(z_dim, z_dim).cpu().numpy(), B.squeeze().view(z_dim, u_dim).cpu().numpy()
     z_tensor, u_tensor = z_tensor.squeeze().repeat(z_dim, 1), u_tensor.squeeze().repeat(z_dim, 1)
     z_tensor = z_tensor.detach().requires_grad_(True)
     u_tensor = u_tensor.detach().requires_grad_(True)
@@ -287,7 +287,7 @@ def save_traj(images, image_goal, gif_path, task):
         return m1, m2
 
     frames = len(images)
-    if task == "plane":
+    if task == "planar":
         fps = 2
     else:
         fps = 20
