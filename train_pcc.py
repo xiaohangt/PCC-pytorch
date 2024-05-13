@@ -8,7 +8,7 @@ from os import path
 import numpy as np
 import torch
 import torch.optim as optim
-from datasets import CartPoleDataset, PendulumDataset, PlanarDataset, ThreePoleDataset
+from datasets import CartPoleDataset, PendulumDataset, PlanarDataset, ThreePoleDataset, GYMPendulumDataset
 from latent_map_planar import draw_latent_map
 from losses import KL, ae_loss, bernoulli, curvature, entropy, gaussian, vae_bound
 from mdp.plane_obstacles_mdp import PlanarObstaclesMDP
@@ -25,10 +25,12 @@ datasets = {
     "pendulum": PendulumDataset,
     "cartpole": CartPoleDataset,
     "threepole": ThreePoleDataset,
+    "gym_pendulum": GYMPendulumDataset,
 }
 dims = {
     "planar": (1600, 2, 2),
     "pendulum": (4608, 3, 1),
+    "gym_pendulum": (2, 3, 1),
     "cartpole": ((2, 80, 80), 8, 1),
     "threepole": ((2, 80, 80), 8, 3),
 }
@@ -65,6 +67,7 @@ def compute_loss(
     vae_coeff=0.01,
     determ_coeff=0.3,
 ):
+    
     # prediction and consistency loss
     pred_loss = -bernoulli(x_next, p_x_next) + KL(q_z_backward, p_z) - entropy(q_z_next) - gaussian(z_next, p_z_next)
 
@@ -104,6 +107,7 @@ def train(model, env_name, train_loader, lam, vae_coeff, determ_coeff, optimizer
 
     start = time.time()
     for x, u, x_next in train_loader:
+
         x = x.to(device).double()
         u = u.to(device).double()
         x_next = x_next.to(device).double()
@@ -173,7 +177,7 @@ def train(model, env_name, train_loader, lam, vae_coeff, determ_coeff, optimizer
 
 def main(args):
     env_name = args.env
-    assert env_name in ["planar", "pendulum", "cartpole", "threepole"]
+    assert env_name in ["planar", "pendulum", "cartpole", "threepole", "gym_pendulum"]
     armotized = args.armotized
     log_dir = args.log_dir
     seed = args.seed
@@ -200,7 +204,7 @@ def main(args):
     dataset = datasets[env_name]
     data = dataset(sample_size=data_size, noise=noise_level)
     data_loader = DataLoader(
-        data, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=4, worker_init_fn=_init_fn
+        data, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=1, worker_init_fn=_init_fn
     )
 
     x_dim, z_dim, u_dim = dims[env_name]

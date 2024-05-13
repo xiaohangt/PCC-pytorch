@@ -44,7 +44,7 @@ class Decoder(nn.Module):
     def forward(self, z):
         hidden_neurons = self.net_hidden(z)
         logits = self.net_logits(hidden_neurons)
-        return Bernoulli(logits=logits)
+        return logits #Bernoulli(logits=logits)
 
 
 class Dynamics(nn.Module):
@@ -202,6 +202,60 @@ class PendulumBackwardDynamics(BackwardDynamics):
         net_joint_mean = nn.Linear(200, z_dim)
         net_joint_logstd = nn.Linear(200, z_dim)
         super(PendulumBackwardDynamics, self).__init__(
+            net_z, net_u, net_x, net_joint_hidden, net_joint_mean, net_joint_logstd, z_dim, u_dim, x_dim
+        )
+
+
+class GymPendulumEncoder(Encoder):
+    def __init__(self, x_dim=2, z_dim=3):
+        net_hidden = nn.Sequential(
+            nn.Linear(x_dim, 10),
+            nn.ReLU(),
+            nn.Linear(10, 10),
+            nn.ReLU(),
+        )
+        net_mean = nn.Linear(10, z_dim)
+        net_logstd = nn.Linear(10, z_dim)
+        super(GymPendulumEncoder, self).__init__(net_hidden, net_mean, net_logstd, x_dim, z_dim)
+
+
+class GymPendulumDecoder(Decoder):
+    def __init__(self, z_dim=3, x_dim=2):
+        net_hidden = nn.Sequential(
+            nn.Linear(z_dim, 10),
+            nn.ReLU(),
+            nn.Linear(10, 10),
+            nn.ReLU(),
+        )
+        net_logits = nn.Linear(10, x_dim)
+        super(GymPendulumDecoder, self).__init__(net_hidden, net_logits, z_dim, x_dim)
+
+
+class GymPendulumDynamics(Dynamics):
+    def __init__(self, armotized, z_dim=3, u_dim=1):
+        net_hidden = nn.Sequential(nn.Linear(z_dim + u_dim, 10), nn.ReLU(), nn.Linear(10, 10), nn.ReLU())
+        net_mean = nn.Linear(10, z_dim)
+        net_logstd = nn.Linear(10, z_dim)
+        if armotized:
+            net_A = nn.Linear(10, z_dim * z_dim)
+            net_B = nn.Linear(10, u_dim * z_dim)
+        else:
+            net_A, net_B = None, None
+        super(GymPendulumDynamics, self).__init__(net_hidden, net_mean, net_logstd, net_A, net_B, z_dim, u_dim, armotized)
+
+
+class GymPendulumBackwardDynamics(BackwardDynamics):
+    def __init__(self, z_dim=3, u_dim=1, x_dim=2):
+        net_z = nn.Linear(z_dim, 10)
+        net_u = nn.Linear(u_dim, 10)
+        net_x = nn.Linear(x_dim, 10)
+        net_joint_hidden = nn.Sequential(
+            nn.Linear(10 + 10 + 10, 10),
+            nn.ReLU(),
+        )
+        net_joint_mean = nn.Linear(10, z_dim)
+        net_joint_logstd = nn.Linear(10, z_dim)
+        super(GymPendulumBackwardDynamics, self).__init__(
             net_z, net_u, net_x, net_joint_hidden, net_joint_mean, net_joint_logstd, z_dim, u_dim, x_dim
         )
 
@@ -382,6 +436,7 @@ class ThreePoleBackwardDynamics(BackwardDynamics):
 CONFIG = {
     "planar": (PlanarEncoder, PlanarDecoder, PlanarDynamics, PlanarBackwardDynamics),
     "pendulum": (PendulumEncoder, PendulumDecoder, PendulumDynamics, PendulumBackwardDynamics),
+    "gym_pendulum": (GymPendulumEncoder, GymPendulumDecoder, GymPendulumDynamics, GymPendulumBackwardDynamics),
     "cartpole": (CartPoleEncoder, CartPoleDecoder, CartPoleDynamics, CartPoleBackwardDynamics),
     "threepole": (ThreePoleEncoder, ThreePoleDecoder, ThreePoleDynamics, ThreePoleBackwardDynamics),
 }

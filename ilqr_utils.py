@@ -123,7 +123,8 @@ def forward(z_seq, u_seq, k, K, dynamics, alpha):
 
 
 def get_x_data(mdp, state, config):
-    image_data = mdp.render(state).squeeze()
+    # image_data = mdp.render(state).squeeze()
+    image_data = state
     x_dim = config["obs_shape"]
     if config["task"] == "plane":
         x_dim = np.prod(x_dim)
@@ -137,6 +138,8 @@ def get_x_data(mdp, state, config):
         x_data[0, :, :] = torch.from_numpy(image_data)
         x_data[1, :, :] = torch.from_numpy(image_data)
         x_data = x_data.unsqueeze(0)
+    elif config["task"] in ["gym_swing", "gym_balance"]:
+        x_data = torch.from_numpy(state).double().view([2,]).unsqueeze(0)
     return x_data
 
 
@@ -157,6 +160,8 @@ def update_horizon_start(mdp, s, u, encoder, config):
         x_next[0, :, :] = torch.from_numpy(obs)
         x_next[1, :, :] = torch.from_numpy(obs_next)
         x_next = x_next.unsqueeze(0)
+    elif config["task"] in ["gym_swing", "gym_balance"]:
+        x_next = torch.from_numpy(s_next)
     with torch.no_grad():
         z_next = encoder(x_next).mean
     return s_next, z_next.squeeze().numpy()

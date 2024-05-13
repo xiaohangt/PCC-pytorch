@@ -38,6 +38,7 @@ torch.set_default_dtype(torch.float64)
 config_path = {
     "plane": "ilqr_config/plane.json",
     "swing": "ilqr_config/swing.json",
+    "gym_swing": "ilqr_config/gym_swing.json",
     "balance": "ilqr_config/balance.json",
     "cartpole": "ilqr_config/cartpole.json",
     "threepole": "ilqr_config/threepole.json",
@@ -45,6 +46,7 @@ config_path = {
 env_data_dim = {
     "planar": (1600, 2, 2),
     "pendulum": ((2, 48, 48), 3, 1),
+    "gym_pendulum": (2, 3, 1),
     "cartpole": ((2, 80, 80), 8, 1),
     "threepole": ((2, 80, 80), 8, 3),
 }
@@ -52,8 +54,9 @@ env_data_dim = {
 
 def main(args):
     task_name = args.task
-    assert task_name in ["planar", "balance", "swing", "cartpole", "threepole", "pendulum_gym", "mountain_car"]
+    assert task_name in ["gym_swing", "planar", "balance", "swing", "cartpole", "threepole", "pendulum_gym", "mountain_car"]
     env_name = "pendulum" if task_name in ["balance", "swing"] else task_name
+    env_name = "gym_pendulum" if task_name in ["gym_balance", "gym_swing"] else task_name
 
     setting_path = args.setting_path
     setting = os.path.basename(os.path.normpath(setting_path))
@@ -142,7 +145,7 @@ def main(args):
             # mdp
             if env_name == "planar":
                 mdp = PlanarObstaclesMDP(goal=s_goal, goal_thres=config["distance_thresh"], noise=noise)
-            elif env_name == "pendulum":
+            elif env_name == "pendulum" or  env_name == "gym_pendulum":
                 mdp = PendulumMDP(frequency=config["frequency"], noise=noise, torque=config["torque"])
             elif env_name == "cartpole":
                 mdp = CartPoleMDP(frequency=config["frequency"], noise=noise)
@@ -163,8 +166,11 @@ def main(args):
             # perform reciding horizon iLQR
             s_start_horizon = np.copy(s_start)  # s_start and z_start is changed at each horizon
             z_start_horizon = np.copy(z_start)
-            obs_traj = [mdp.render(s_start).squeeze()]
+            # obs_traj = [mdp.render(s_start).squeeze()]
+            obs_traj = [s_start]
+
             goal_counter = 0.0
+            raw_return = 0.0
             for plan_iter in range(1, horizon + 1):
                 latent_cost_list = [None] * len(all_actions_trajs)
                 # iterate over all trajectories
@@ -210,8 +216,10 @@ def main(args):
                     mdp, s_start_horizon, action_chosen, encoder, config
                 )
 
-                obs_traj.append(mdp.render(s_start_horizon).squeeze())
+                # obs_traj.append(mdp.render(s_start_horizon).squeeze())
+                obs_traj.append(s_start_horizon)
                 goal_counter += mdp.reward_function(s_start_horizon)
+                raw_return += mdp.raw_reward_function(s_start_horizon, action_chosen)
 
                 all_actions_trajs = refresh_actions_trajs(
                     all_actions_trajs,
@@ -224,15 +232,17 @@ def main(args):
 
             # compute the percentage close to goal
             success_rate = goal_counter / horizon
-            print("Success rate: %.2f" % (success_rate))
+            print("Success rate: %.2f" % (success_rate), "Return:", raw_return)
             percent = success_rate
             avg_percent += success_rate
             with open(model_path + "/result.txt", "a+") as f:
                 f.write(config["task"] + ": " + str(percent) + "\n")
 
             # save trajectory as gif file
-            gif_path = model_path + "/task_{:01d}.gif".format(task_counter + 1)
-            save_traj(obs_traj, mdp.render(s_goal).squeeze(), gif_path, config["task"])
+            # gif_path = model_path + "/task_{:01d}.gif".format(task_counter + 1)
+            # save_traj(obs_traj, mdp.render(s_goal).squeeze(), gif_path, config["task"])
+            # save_traj(obs_traj, (s_goal), gif_path, config["task"])
+
 
         avg_percent = avg_percent / 10
         print("Average success rate: " + str(avg_percent))
@@ -255,7 +265,7 @@ if __name__ == "__main__":
     parser.add_argument("--task", required=True, type=str, help="task to perform")
     parser.add_argument("--setting_path", required=True, type=str, help="path to load trained models")
     parser.add_argument("--noise", type=float, default=0.0, help="noise level for mdp")
-    parser.add_argument("--epoch", type=int, default=2000, help="number of epochs to load model")
+    parser.add_argument("--epoch", type=int, default=1000, help="number of epochs to load model")
     args = parser.parse_args()
 
     main(args)

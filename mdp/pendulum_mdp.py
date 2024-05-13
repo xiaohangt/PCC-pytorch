@@ -66,6 +66,12 @@ class PendulumMDP(PoleBase):
         theta_double_dot = theta_prime_num / theta_prime_denum
 
         return np.array([theta_dot, theta_double_dot, 0.0])
+    
+    def raw_reward_function(self, s, a):
+        """Reward function."""
+        angle = s[StateIndex.THETA]
+        angle_dot = s[StateIndex.THETA_DOT]
+        return -(angle**2 + 0.1 * angle_dot**2 + 0.001 * a**2)
 
     def render(self, s):
         im = Image.new("L", (self.width, self.height))
